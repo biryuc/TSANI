@@ -1,0 +1,29 @@
+void setup()
+{
+  tsanilib_init();
+  Serial.begin(9600);
+  portMask(0, 0xFF);
+  portMask(1, 0xFF);
+}
+
+void loop()
+{
+  unsigned char port0, port1;
+  int num;
+  
+  num = Serial.parseInt();//принимает введеную строку
+  
+  portOut(0,num & 0xFF);
+  portOut(1,(num >> 8)&0xFF);
+  
+  portIn(0, &port0);
+  portIn(1, &port1);
+  
+  
+  Serial.print("READ 0 = 0x");
+  Serial.print(port0, HEX);
+  Serial.print(", READ 1 = 0x");
+  Serial.println(port1, HEX);
+ 
+  delay(100);
+}
