@@ -1,0 +1,119 @@
+void setup()
+{
+	Serial.begin(9600);
+	Serial.setTimeout(2147483647L);
+}
+
+int calculate_roots(float A, float B, float C, float *pD, float *pValue1, float *pValue2)
+{
+	double D = 0;
+	int ret;
+	D = (B*B) - 4.*A*C;
+	if(D > 0)
+	{
+		*pValue1 = (-B - sqrt(D))/(2.*A);
+		*pValue2 = (-B + sqrt(D))/(2.*A);
+		ret = 1; 
+	}
+  
+	if (D < 0)
+	{
+		*pValue1 = (-B/(2.*A));
+		*pValue2 = (sqrt(-D)/(2.*A));
+		ret = 2; 
+	}
+	if(D == 0)
+	{
+		*pValue1 = (-B/(2.*A));
+		ret = 3; 
+	}
+
+	*pD = float(D);
+	return ret;
+};
+
+void loop()
+{
+	float A, B, C, D, Value1, Value2,X, Y;
+	int result;
+	
+
+	Serial.println();
+	Serial.println("Enter A, B, C:");
+	A = Serial.parseFloat();
+	B = Serial.parseFloat();
+	C = Serial.parseFloat();
+	Serial.print(A);
+	Serial.println();
+	Serial.print(B);
+	Serial.println();
+	Serial.print(C);
+	
+
+	if(A == 0)
+	{
+		if(B == 0 && C !=0)
+		{
+			D = 0;
+			result = 5; 
+		}
+		if(B == 0 && C ==0)
+		{
+			result = 6; 
+		}
+		if (B != 0)
+		{
+			D = B*B;
+			Value1 = float(-C/B);
+			result = 4; 
+		}
+	}
+	else 
+	{
+		result = calculate_roots(A, B, C, &D, &Value1, &Value2);
+	}
+  
+	switch(result){
+		case 1:
+			Serial.println("2 real roots:");
+			Serial.print("X1 = ");
+			Serial.println(Value1);
+			Serial.print("X2 = ");
+			Serial.println(Value2);
+			X = (-B/(2*A));
+			Y = ((4*A*C - B*B)/(4*A));
+			Serial.print("Parabola's Vertex: X = ");
+			Serial.print(X);
+			Serial.print(" Y = ");
+			Serial.println(Y);
+		break;
+		case 2:
+			Serial.println("2 complex roots:");
+			Serial.print("X1 = ");
+			Serial.print(Value1);
+			Serial.print(" - i*");
+			Serial.println(Value2);
+			Serial.print("X2 = ");
+			Serial.print(Value1);
+			Serial.print(" + i*");
+			Serial.println(Value2);
+		break;
+		case 3:
+			Serial.println("1 root:");
+			Serial.print("X1 = X2 = ");
+			Serial.println(Value1);
+		break;
+		case 4:
+			Serial.print("A linear equeation, 1 root, X1 = ");
+			Serial.println(Value1);
+		break;
+		case 5:
+			Serial.println("No roots");
+		break;
+		case 6:
+			Serial.println("Infinite number of roots");
+		break;
+	}	
+
+}
+

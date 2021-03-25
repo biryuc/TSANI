@@ -1,0 +1,26 @@
+int pin=13;
+
+void setup()
+{
+Serial.begin(9600);
+Serial.setTimeout(2147483647L);
+pinMode(pin, OUTPUT);
+}
+
+void loop()
+{
+digitalWrite(pin, HIGH);
+double pi = 3.1415926535897932384626433832795;
+double Freq, A;
+Serial.println("Enter frequency(Hz) and amplitude(V):");
+Freq = Serial.parseFloat();
+A = Serial.parseFloat();
+if (Freq < 0) {
+Serial.println("Sorry, you have the mistake.");
+} else {
+for (int i = 0; i < 101; i++) {
+digitalRead(A*sin(i*0.01*Freq*2*pi));
+Serial.println(A*sin(i*0.01*Freq*2*pi));
+}
+}
+}
