@@ -1,0 +1,396 @@
+/* ↓↓↓ Библиотека tsanilib. Скопируйте её в свой проект ↓↓↓
+Задайте ненулевую PORTS_DELAY_MS,
+если хотите добавить задержку
+перед функциями portIn(), portOut(), portMask().
+
+Вызовите tsanilib_init(); перед использование библиотеки.
+
+port 0 line 7...0 = 9...2
+port 1 line 7...0 = A4...A0, 12, 11, 10
+port 2 отсутствует
+Не используются линии 0 (Rx), 1 (Tx), 13 (LED), A5
+
+ЗАПРЕЩЕНО использовать функцию tsanilib_get_arduino_line(),
+переменные tsanilib_write, tsanilib_mask
+*/
+#define PORTS_DELAY_MS 0 // задержка в мс перед любым обращением к портам; 0 — без задержки
+
+/*
+Виртуальные регистры.
+Нужны, чтобы pull-up-резисторы
+никогда не включались
+*/
+unsigned char tsanilib_write[2] = {0, 0};
+unsigned char tsanilib_mask[2] = {0, 0};
+
+// именно эта функция сопоставляет линии Ардуино линиям портов tsanilib; если нужно другое сопоставление, достаточно изменить лишь её
+int tsanilib_get_arduino_line(int port, int bit) {
+	switch (port) {
+		case 0:
+		switch (bit) {
+			case 0: return 2;
+			case 1: return 3;
+			case 2: return 4;
+			case 3: return 5;
+			case 4: return 6;
+			case 5: return 7;
+			case 6: return 8;
+			case 7: return 9;
+		}
+		case 1:
+		switch (bit) {
+			case 0: return 10;
+			case 1: return 11;
+			case 2: return 12;
+			case 3: return A0;
+			case 4: return A1;
+			case 5: return A2;
+			case 6: return A3;
+			case 7: return A4;
+		}
+	}
+	return -1;
+}
+
+void portIn(int port, unsigned char *data) {
+	#if PORTS_DELAY_MS
+	delay(PORTS_DELAY_MS);
+	#endif
+	*data = 0;
+	for (int i = 0; i < 8; i++) {
+		*data |= digitalRead(tsanilib_get_arduino_line(port, i))<<i;
+	}
+	return;
+}
+
+void portOut(int port, unsigned char data) {
+	#if PORTS_DELAY_MS
+	delay(PORTS_DELAY_MS);
+	#endif
+	tsanilib_write[port] = data;
+	for (int i = 0; i < 8; i++) {
+		if (tsanilib_mask[port]&(1<<i)) { // работаем лишь с линиями вывода; линии ввода игнорируем
+			digitalWrite(tsanilib_get_arduino_line(port, i), data&(1<<i));
+		}
+	}
+}
+
+void portMask(int port, unsigned char mask) {
+	#if PORTS_DELAY_MS
+	delay(PORTS_DELAY_MS);
+	#endif
+	tsanilib_mask[port] = mask;
+	for (int i = 0; i < 8; i++) {
+		if (mask & (1<<i)) { // это линия вывода, надо записать в соответствии с регистром записи
+			pinMode(tsanilib_get_arduino_line(port, i), OUTPUT);
+			digitalWrite(tsanilib_get_arduino_line(port, i), tsanilib_write[port]&(1<<i));
+		} else { // это линия ввода
+			pinMode(tsanilib_get_arduino_line(port, i), INPUT);
+		}
+	}
+	return;
+}
+
+void tsanilib_init(void) {
+	portMask(0,0);
+	portMask(1,0);
+	portOut(0,0);
+	portOut(1,0);
+}
+/* ↑↑↑ Конец библиотеки tsanilib ↑↑↑ */
+
+void setup()
+{
+  tsanilib_init();
+  Serial.begin(2000000);
+ 
+  // ↓↓↓ Перевод шины I2C в начальное состояние ↓↓↓
+  portMask(0,0x7F);//Весь порт 1 и порт 0 SDAin ставим на запись
+  // ↑↑↑ Перевод шины I2C в начальное состояние ↑↑↑
+  
+  // ↓↓↓ Ведомому требуется время на инициализацию ↓↓↓
+  delay(100);
+  // ↑↑↑ Ведомому требуется время на инициализацию ↑↑↑
+  
+ // 1.3 Вывод name
+  
+  char res[9];
+  res[8]='\0';
+  int data=0;
+  int a=1;
+  for (int p=0;p<8;p++)
+  {
+    RTranzWithData(&data,1,(0x08+p),1);
+    res[p]=(char)data;
+  }
+  Serial.write(res);
+  Serial.println();
+
+   
+  
+}
+
+double T;
+
+void loop(){
+  
+  //1.2 Бегущая единица
+  
+  for (int i=1; i<129;i*=2)
+  {
+    WTranzWithData(i,1,0);
+    delay(25);
+  }
+  
+  
+  
+  
+  // 2.1 Считывание температуры с термодатчика
+
+  RTempOfSensor(&T);
+  Serial.println(T);
+}
+
+ 
+void WriteIntoBus(int sda, int scl) {
+  int data=(sda<<3)|(scl<<4)| 0x07;//SDAout,SCLout
+  portOut(0,data);
+}
+  
+void ReadFromBus(int *sda, int *scl) {
+  unsigned char data1,data2;
+  portIn(0,&data1);
+  portIn(0,&data2);
+  *sda=(data1>>7)&0x01;//SDAIn
+  *scl=(data2)&0x01;//SCLIn
+  //unsigned char data1;
+  //unsigned char data2;
+  //portIn(0,&data1);
+  //portIn(0,&data2);
+  //*sda=((data1)>>7)&0x01;
+  //*scl=((data2))&0x01;
+  //delay(PORTS_DELAY_MS);
+}
+
+void StartOfTranz(){
+  WriteIntoBus(1,1);
+  WriteIntoBus(0,1);
+  WriteIntoBus(0,0);
+}
+
+void EndOfTranz(){
+  WriteIntoBus(0,0);
+  WriteIntoBus(0,1);
+  WriteIntoBus(1,1);
+}
+
+int GetSDA(){
+  unsigned char data;
+  portIn(0,&data);
+  return (data>>7)&0x01;
+}
+
+void SendBit(int Bit){
+  WriteIntoBus(GetSDA(),0);
+  WriteIntoBus(Bit,0);
+  WriteIntoBus(Bit,1);//Начал такт
+  WriteIntoBus(Bit,0);//завершил такт
+}
+
+int GetBit(){
+  int Bit;
+  WriteIntoBus(1,0);
+  WriteIntoBus(1,1);
+  Bit=GetSDA();
+  WriteIntoBus(1,0);
+  return Bit;
+}
+  
+
+void SendByte(int Byte){
+  for(int a = 0; a<8; a++)
+  SendBit((Byte >> (7-a))&0x01);
+  
+  /*for(int a = 0; a<8; a++)
+  {
+  	BitN=(Byte>>(7-a))&0x01;
+    WriteIntoBus(0,0);
+  	WriteIntoBus(BitN,0);
+  	WriteIntoBus(BitN,1);
+  	WriteIntoBus(BitN,0);
+  	WriteIntoBus(0,0);
+    Serial.println(BitN);
+
+  }
+  Serial.println("GG");*/
+}
+
+void GetByte (int* Byte){
+  int data=0;
+  for(int i=0; i<8;i++)
+  { 
+    data=data|(GetBit()<<(7-i));
+  }
+  *Byte=data;
+  
+  //10000000 (0x80) no mne nuzhno 01111111 (0x7F)
+/*  portMask(0,0x7F);
+  int scl;
+  int bit;
+  int a;
+  for(int n = 0; n<8; n++){
+    WriteIntoBus(1,0);
+  	WriteIntoBus(1,1);
+    ReadFromBus(&bit,&scl);
+    WriteIntoBus(1,0);
+  	WriteIntoBus(0,0);
+    Serial.println(bit);
+    //delay(PORTS_DELAY_MS);
+    *Byte=*Byte|((bit&0x01)<<(7-n));
+    a=*Byte;
+  }
+  Serial.println(a);
+  portMask(0,0x81);
+  */
+}
+
+void getAck(){ //Получаю бит подтверждения
+  /*double time=0;
+  WriteIntoBus(GetSDA(),0);
+  WriteIntoBus(0,0);
+  WriteIntoBus(0,1);
+  WriteIntoBus(0,0);
+  return 0;*/
+  int Bit;
+  Bit=GetBit();
+  if(Bit !=0) Serial.print("NoACK");
+  
+}
+
+void sendNonAck(){
+  SendBit(1);
+  /*WriteIntoBus(0,0);
+  WriteIntoBus(0,0);
+  WriteIntoBus(0,1);
+  WriteIntoBus(0,0);
+  WriteIntoBus(0,0);*/
+}
+
+void sendAck(){
+   SendBit(0);
+  /*WriteIntoBus(0,0);
+  WriteIntoBus(1,0);
+  WriteIntoBus(1,1);
+  WriteIntoBus(1,0);
+  WriteIntoBus(0,0);*/
+}
+
+void WTranzWithData(int data,int adr, int sadr){
+  adr=adr<<1;
+  StartOfTranz();
+  SendByte(adr);
+  getAck();
+  SendByte(sadr);
+  getAck();
+  SendByte(data);
+  getAck();
+  EndOfTranz();
+}
+
+void RTranzWithData(int* data,int adr, int sadr, int n){
+  adr=adr<<1;
+  StartOfTranz();
+  SendByte(adr);
+  getAck();
+  SendByte(sadr);
+  getAck();
+  EndOfTranz();
+  StartOfTranz();
+  adr=adr|0x01;
+  SendByte(adr);
+  getAck();
+  //GetByte(data);
+  for (int i=0;i<n;i++){
+    GetByte(data+i);
+    if(i !=(n-1)) sendAck();
+  }
+  sendNonAck();
+  EndOfTranz();
+}
+
+/*void Temp(int *Hbyte, int *Lbyte, double *T){
+  int data=0;
+  double fraq=0;
+  int temp,a,b;
+  data=((*Hbyte >> 7 )& 1);
+  if (data==1)
+  {
+   	b=*Hbyte;
+    temp=b|0xFF00;
+    data=temp;
+  }
+  if (data==0)
+  {
+    data=*Hbyte;
+  }
+  *Lbyte=(*Lbyte>>6)&0x03;
+  *T=(double)data+*Lbyte*0.25;
+}
+*/
+
+/*
+int RTemp(double* value){
+  int temp,data=0;
+  int adr=0x28;	//Адрес термодатчика
+  adr=(adr<<1)|1;//Читаем по адресу термодатчика
+  StartOfTranz();
+  SendByte(adr);
+  getAck();
+  GetByte(&temp);
+  sendAck();
+  data=temp<<2;//Температура содержится в 2байтах, 8 из которых мы уже получили - запишем их
+  GetByte(&temp);
+  sendNonAck();
+  data=data + (temp>>6); //Запишем оставшиеся 2 бита
+  EndOfTranz();
+  data = data > 512 ? data - 1024 : data;// Интерпритация данных
+  *value = (double)data/4;
+  return 0;
+}
+*/
+void RTempOfSensor(double* value){
+  *value=0;
+  int temp,b;
+  int data=0;
+  int Byte1=0;
+  int Byte2=0;
+  int adr=0x28;	//Адрес термодатчика
+  adr=(adr<<1)|0x01;//Читаем по адресу термодатчика
+  StartOfTranz();
+  SendByte(adr);
+  getAck();
+  GetByte(&Byte1);
+  sendAck();
+  GetByte(&Byte2);
+  data=((Byte1>>7)&0x01);
+  if (data==1)
+  {
+    b=Byte1;
+    temp=b|0xFF00;
+    data=temp;
+  }
+  if (data==0)
+  {
+    data=Byte1;
+  }
+  Byte2=(Byte2>>6)&0x03;
+  *value=(double)data+Byte2*0.25;
+  sendNonAck();
+  EndOfTranz();
+}
+  
+    
+
+  
+
+
